@@ -135,6 +135,10 @@ table.matrix{border-collapse:separate;border-spacing:0;width:100%;min-width:940p
 .load-fill{display:block;height:8px;border-radius:5px;}
 .load-row .lc{font-family:"IBM Plex Mono";font-size:12px;font-weight:600;color:var(--ink-2);width:14px;text-align:right;}
 .unavail{font-family:"IBM Plex Mono";font-size:10.5px;color:var(--caccm);margin-left:88px;margin-top:-2px;}
+.leadhdr td{border-top:2px solid var(--line);}
+.roletag{font-family:"IBM Plex Mono";font-size:9px;font-weight:600;letter-spacing:.06em;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px;text-transform:uppercase;}
+.load-site.leadcard .load-row{grid-template-columns:118px 1fr auto;}
+.load-site.leadcard .ln{overflow:visible;}
 
 .foot{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.6;}
 .foot code{font-family:"IBM Plex Mono";background:var(--line-2);padding:1px 5px;border-radius:4px;color:var(--ink-2);}
@@ -230,7 +234,10 @@ let leg = `<div class="grp">`;
 for(const [name,info] of Object.entries(SITES))
   leg+=`<span class="key"><span class="dot" style="background:var(--${info.key})"></span>${name}</span>`;
 leg+=`</div><span class="sep"></span><div class="grp">`;
-leg+=`<span class="key"><span class="dot" style="background:var(--pd)"></span>Leadership panel · PD / APD / Chief</span>`;
+leg+=`<span class="key" style="color:var(--muted);font-weight:600">Leadership:</span>`;
+leg+=`<span class="key"><span class="dot" style="background:#B7791F"></span>PD</span>`;
+leg+=`<span class="key"><span class="dot" style="background:#475569"></span>APD</span>`;
+leg+=`<span class="key"><span class="dot" style="background:#0F766E"></span>Chief</span>`;
 leg+=`</div>`;
 document.getElementById("legend").innerHTML = leg;
 
@@ -245,6 +252,16 @@ const peopleBySite = {};
 siteOrder.forEach(s=>peopleBySite[s]=[]);
 DATA.people.forEach(p=>{const s=SITE_OF[p.name];if(s&&peopleBySite[s])peopleBySite[s].push({name:p.name,count:p.count});});
 ["CHCO","VA","CACCM"].forEach(s=>{peopleBySite[s]=Object.entries(ROT[s]).sort((a,b)=>b[1]-a[1]).map(([n,c])=>({name:n,count:c}));});
+
+/* leadership roster: role-ordered, deduped, with day counts */
+const LEAD_ROLE_ORDER=["PD","APD","Chief"];
+const LEAD_COLOR={PD:{solid:"#B7791F",bg:"#FBF1DC"},APD:{solid:"#475569",bg:"#E7EBF0"},Chief:{solid:"#0F766E",bg:"#DEF0ED"}};
+const leadPeople=[];
+{const seen={};
+ LEAD_ROLE_ORDER.forEach(role=>{DATA.per_date.forEach(d=>{const v=d.roles[role];if(!v)return;
+   (Array.isArray(v)?v:[v]).forEach(n=>{const key=role+"|"+n;if(seen[key])return;seen[key]=1;
+     let c=0;DATA.per_date.forEach(dd=>{const vv=dd.roles[role];if(vv&&(Array.isArray(vv)?vv:[vv]).includes(n))c++;});
+     leadPeople.push({name:n,role,count:c});});});});}
 
 let mt = "<thead><tr><th class='corner mhead' style='text-align:left'>Interviewer</th>";
 DATA.per_date.forEach((d,i)=>{
@@ -272,7 +289,20 @@ DATA.per_date.forEach((d,i)=>{
   const h=14+Math.round((d.count/maxC)*30);
   mt+=`<td class="mcell${brk[i]?' newmonth':''}" style="border-bottom:none"><div class="barwrap"><span class="barn mono">${d.count}</span><span class="bar" style="height:${h}px"></span></div></td>`;
 });
-mt+="</tr></tbody>";
+mt+="</tr>";
+/* leadership group */
+mt+=`<tr class="grouphdr leadhdr"><td colspan="16"><span style="color:#334155">■</span>&nbsp; Leadership panel</td></tr>`;
+leadPeople.forEach(p=>{
+  const c=LEAD_COLOR[p.role];
+  mt+=`<tr><td class="rowlab"><div class="nm"><span class="dot" style="background:${c.solid}"></span><span>${p.name} <span class="roletag">${p.role}</span></span></div></td>`;
+  DATA.per_date.forEach((d,i)=>{
+    const v=d.roles[p.role];
+    const on=v && (Array.isArray(v)?v:[v]).includes(p.name);
+    mt+=`<td class="mcell${brk[i]?' newmonth':''}">${on?`<span class="chip" style="background:${c.bg};color:${c.solid}">●</span>`:""}</td>`;
+  });
+  mt+="</tr>";
+});
+mt+="</tbody>";
 document.getElementById("matrix").innerHTML = mt;
 
 /* ---------- date nav ---------- */
@@ -322,11 +352,21 @@ siteOrder.forEach(site=>{
   });
   load+=`</div>`;
 });
+/* leadership load card */
+{
+  const mx=Math.max(...leadPeople.map(r=>r.count));
+  load+=`<div class="load-site leadcard"><h3 style="color:#334155"><span class="dot" style="background:#334155"></span>Leadership panel</h3>`;
+  leadPeople.slice().sort((a,b)=>b.count-a.count).forEach(r=>{
+    const c=LEAD_COLOR[r.role];
+    load+=`<div class="load-row"><span class="ln">${r.name} <span class="roletag">${r.role}</span></span><span class="load-track"><span class="load-fill" style="width:${(r.count/mx)*100}%;background:${c.solid}"></span></span><span class="lc mono">${r.count}</span></div>`;
+  });
+  load+=`</div>`;
+}
 document.getElementById("load").innerHTML = load;
 
 /* ---------- footnote ---------- */
 document.getElementById("foot").innerHTML =
-  `Rebuilt from <code>Residency_Interviewers_2026-27.xlsx</code>. &nbsp;“Site panel size” counts interviewers at the five clinical sites (UH · Denver Health · CHCO · VA · CACCM); the PD / APD / Chief leadership panel sits on top of that each day and is shown separately. &nbsp;January dates fall in 2027. &nbsp;“Out” notes list dates each interviewer flagged as unavailable.`;
+  `Rebuilt from <code>Residency_Interviewers_2026-27.xlsx</code>. &nbsp;“Site panel size” counts interviewers at the five clinical sites (UH · Denver Health · CHCO · VA · CACCM); the PD / APD / Chief leadership panel is shown as its own group in the overview and load views but is not included in the panel-size totals. &nbsp;January dates fall in 2027. &nbsp;“Out” notes list dates each interviewer flagged as unavailable.`;
 </script>
 </body>
 </html>
